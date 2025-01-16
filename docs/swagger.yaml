@@ -1,0 +1,52 @@
+definitions:
+  check.Header:
+    properties:
+      input:
+        type: string
+      replace-end:
+        type: string
+      replace-front:
+        type: string
+    type: object
+  check.Respond:
+    properties:
+      detect:
+        type: boolean
+      input:
+        type: string
+      output:
+        type: string
+      swear:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /api/v1/korcen:
+    post:
+      consumes:
+      - application/json
+      description: Processes a Korcen request and returns the result
+      parameters:
+      - description: Korcen Input
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/check.Header'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Korcen Result
+          schema:
+            $ref: '#/definitions/check.Respond'
+        "400":
+          description: Invalid Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Process Korcen Request
+      tags:
+      - korcen
+swagger: "2.0"

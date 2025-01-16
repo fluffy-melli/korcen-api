@@ -3,20 +3,24 @@
 package check
 
 import (
+	"encoding/xml"
+
 	"github.com/fluffy-melli/korcen-go"
 )
 
 type Header struct {
-	Input string `json:"input"`
-	Start string `json:"replace-front"`
-	End   string `json:"replace-end"`
+	XMLName xml.Name `json:"-" xml:"header"`
+	Input   string   `json:"input" xml:"input"`
+	Start   string   `json:"replace-front" xml:"replace-front"`
+	End     string   `json:"replace-end" xml:"replace-end"`
 }
 
 type Respond struct {
-	Detect    bool   `json:"detect"`
-	Swear     string `json:"swear"`
-	String    string `json:"input"`
-	NewString string `json:"output"`
+	XMLName   xml.Name `json:"-" xml:"respond"`
+	Detect    bool     `json:"detect" xml:"detect"`
+	Swear     string   `json:"swear" xml:"swear"`
+	String    string   `json:"input" xml:"input"`
+	NewString string   `json:"output" xml:"output"`
 }
 
 func Korcen(header *Header) *Respond {

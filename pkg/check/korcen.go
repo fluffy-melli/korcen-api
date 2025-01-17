@@ -29,6 +29,21 @@ type Respond struct {
 
 type KorcenResult = korcen.CheckInfo
 
+var korcenPool = sync.Pool{
+	New: func() interface{} {
+		return &KorcenResult{}
+	},
+}
+
+func newKorcenResult() *KorcenResult {
+	return korcenPool.Get().(*KorcenResult)
+}
+
+func freeKorcenResult(result *KorcenResult) {
+	*result = KorcenResult{}
+	korcenPool.Put(result)
+}
+
 type Node struct {
 	key   string
 	value *KorcenResult
@@ -111,6 +126,8 @@ func (c *LRUCache) removeElement(elem *list.Element) {
 	c.ll.Remove(elem)
 	node := elem.Value.(*Node)
 	delete(c.items, node.key)
+
+	freeKorcenResult(node.value)
 	freeNode(node)
 }
 
@@ -121,7 +138,9 @@ func Korcen(header *Header) *Respond {
 		return buildRespond(header, info)
 	}
 
-	info := korcen.Check(header.Input)
+	info := newKorcenResult()
+	*info = *korcen.Check(header.Input)
+
 	globalLRU.Set(header.Input, info)
 
 	return buildRespond(header, info)

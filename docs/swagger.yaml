@@ -26,6 +26,7 @@ paths:
     post:
       consumes:
       - application/json
+      - text/xml
       description: Processes a Korcen request and returns the result
       parameters:
       - description: Korcen Input
@@ -36,6 +37,7 @@ paths:
           $ref: '#/definitions/check.Header'
       produces:
       - application/json
+      - text/xml
       responses:
         "200":
           description: Korcen Result

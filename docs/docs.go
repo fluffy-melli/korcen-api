@@ -19,10 +19,12 @@ const docTemplate = `{
             "post": {
                 "description": "Processes a Korcen request and returns the result",
                 "consumes": [
-                    "application/json"
+                    "application/json",
+                    "text/xml"
                 ],
                 "produces": [
-                    "application/json"
+                    "application/json",
+                    "text/xml"
                 ],
                 "tags": [
                     "korcen"

@@ -18,11 +18,6 @@ type TokenBucket struct {
 	mutex      sync.Mutex
 }
 
-var tokenBuckets = struct {
-	sync.Mutex
-	buckets map[string]*TokenBucket
-}{buckets: make(map[string]*TokenBucket)}
-
 func NewTokenBucket(capacity int, refillRate float64) *TokenBucket {
 	return &TokenBucket{
 		capacity:   capacity,
@@ -52,16 +47,22 @@ func (tb *TokenBucket) AllowRequest() bool {
 	return false
 }
 
+var tokenBuckets sync.Map
+
+func getOrCreateTokenBucket(ip string, capacity int, refillRate float64) *TokenBucket {
+	if v, ok := tokenBuckets.Load(ip); ok {
+		return v.(*TokenBucket)
+	}
+	newBucket := NewTokenBucket(capacity, refillRate)
+	actual, _ := tokenBuckets.LoadOrStore(ip, newBucket)
+	return actual.(*TokenBucket)
+}
+
 func TokenBucketMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 
-		tokenBuckets.Lock()
-		if _, exists := tokenBuckets.buckets[ip]; !exists {
-			tokenBuckets.buckets[ip] = NewTokenBucket(100, 100.0/60.0) // 1분당 100개 (초당 약 1.67개 리필)
-		}
-		tb := tokenBuckets.buckets[ip]
-		tokenBuckets.Unlock()
+		tb := getOrCreateTokenBucket(ip, 100, 100.0/60.0) // 1분당 100개 (초당 약 1.67개 리필)
 
 		if !tb.AllowRequest() {
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests"})

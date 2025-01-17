@@ -3,8 +3,10 @@
 package check
 
 import (
+	"container/list"
 	"encoding/xml"
 	"errors"
+	"sync"
 
 	"github.com/asynkron/protoactor-go/actor"
 	"github.com/fluffy-melli/korcen-go"
@@ -25,8 +27,107 @@ type Respond struct {
 	NewString string   `json:"output" xml:"output"`
 }
 
+type KorcenResult = korcen.CheckInfo
+
+type Node struct {
+	key   string
+	value *KorcenResult
+	elem  *list.Element
+}
+
+var nodePool = sync.Pool{
+	New: func() interface{} {
+		return &Node{}
+	},
+}
+
+func newNode(key string, value *KorcenResult) *Node {
+	n := nodePool.Get().(*Node)
+	n.key = key
+	n.value = value
+	n.elem = &list.Element{Value: n}
+	return n
+}
+
+func freeNode(n *Node) {
+	n.key = ""
+	n.value = nil
+	n.elem = nil
+	nodePool.Put(n)
+}
+
+type LRUCache struct {
+	mutex    sync.Mutex
+	capacity int
+	ll       *list.List
+	items    map[string]*list.Element
+}
+
+func NewLRUCache(capacity int) *LRUCache {
+	return &LRUCache{
+		capacity: capacity,
+		ll:       list.New(),
+		items:    make(map[string]*list.Element),
+	}
+}
+
+func (c *LRUCache) Get(key string) (*KorcenResult, bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if elem, ok := c.items[key]; ok {
+		c.ll.MoveToFront(elem)
+		node := elem.Value.(*Node)
+		return node.value, true
+	}
+	return nil, false
+}
+
+func (c *LRUCache) Set(key string, value *KorcenResult) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if elem, ok := c.items[key]; ok {
+		c.ll.MoveToFront(elem)
+		node := elem.Value.(*Node)
+		node.value = value
+		return
+	}
+
+	n := newNode(key, value)
+	elem := c.ll.PushFront(n)
+	n.elem = elem
+	c.items[key] = elem
+
+	if c.ll.Len() > c.capacity {
+		old := c.ll.Back()
+		if old != nil {
+			c.removeElement(old)
+		}
+	}
+}
+
+func (c *LRUCache) removeElement(elem *list.Element) {
+	c.ll.Remove(elem)
+	node := elem.Value.(*Node)
+	delete(c.items, node.key)
+	freeNode(node)
+}
+
+var globalLRU = NewLRUCache(1000)
+
 func Korcen(header *Header) *Respond {
+	if info, ok := globalLRU.Get(header.Input); ok {
+		return buildRespond(header, info)
+	}
+
 	info := korcen.Check(header.Input)
+	globalLRU.Set(header.Input, info)
+
+	return buildRespond(header, info)
+}
+
+func buildRespond(header *Header, info *KorcenResult) *Respond {
 	if !info.Detect {
 		return &Respond{
 			Detect:    false,
@@ -48,6 +149,10 @@ func Korcen(header *Header) *Respond {
 }
 
 func formatMessage(text string, start, end int, prefix, suffix string) string {
+	if start < 0 || end > len(text) || start > end {
+		return text
+	}
+
 	switch {
 	case prefix != "" && suffix != "":
 		return text[:start] + prefix + text[start:end] + suffix + text[end:]

@@ -1,4 +1,4 @@
-// package router
+// internal/router/routes.go
 package router
 
 import (
@@ -24,13 +24,15 @@ func SetupRouter(system *actor.ActorSystem, korcenPID *actor.PID) *gin.Engine {
 	{
 		APIGroup.POST("/korcen", func(c *gin.Context) {
 			var header check.Header
+			isXML := false
 
 			switch c.ContentType() {
 			case "text/xml", "application/xml":
 				if err := c.ShouldBindXML(&header); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid XML request"})
+					c.XML(http.StatusBadRequest, gin.H{"error": "Invalid XML request"})
 					return
 				}
+				isXML = true
 			default:
 				if err := c.ShouldBindJSON(&header); err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON request"})
@@ -39,33 +41,49 @@ func SetupRouter(system *actor.ActorSystem, korcenPID *actor.PID) *gin.Engine {
 			}
 
 			if strings.TrimSpace(header.Input) == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: empty input"})
+				if isXML {
+					c.XML(http.StatusBadRequest, gin.H{"error": "Invalid request: empty input"})
+				} else {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: empty input"})
+				}
 				return
 			}
 
 			msg := &check.KorcenRequest{Header: &header}
-
 			future := system.Root.RequestFuture(korcenPID, msg, 5*time.Second)
 
 			result, err := future.Result()
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				if isXML {
+					c.XML(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				} else {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				}
 				return
 			}
 
 			korcenResp, ok := result.(*check.KorcenResponse)
 			if !ok {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid actor response"})
+				if isXML {
+					c.XML(http.StatusInternalServerError, gin.H{"error": "Invalid actor response"})
+				} else {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid actor response"})
+				}
 				return
 			}
+
 			if korcenResp.Err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": korcenResp.Err.Error()})
+				if isXML {
+					c.XML(http.StatusBadRequest, gin.H{"error": korcenResp.Err.Error()})
+				} else {
+					c.JSON(http.StatusBadRequest, gin.H{"error": korcenResp.Err.Error()})
+				}
 				return
 			}
 
 			response := korcenResp.Respond
 
-			if c.GetHeader("Accept") == "application/xml" {
+			if isXML {
 				c.XML(http.StatusOK, response)
 			} else {
 				c.JSON(http.StatusOK, response)

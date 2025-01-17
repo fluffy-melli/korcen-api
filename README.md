@@ -144,6 +144,171 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+>C#
+```cs
+using System;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        using (HttpClient client = new HttpClient())
+        {
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+            client.DefaultRequestHeaders.Add("Content-Type", "application/json");
+
+            var data = new
+            {
+                input = "욕설이 포함될수 있는 메시지",
+                replace_front = "감지된 욕설 앞부분에 넣을 메시지 (옵션)",
+                replace_end = "감지된 욕설 뒷부분에 넣을 메시지 (옵션)"
+            };
+
+            string json = System.Text.Json.JsonSerializer.Serialize(data);
+            StringContent content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            HttpResponseMessage response = await client.PostAsync("https://korcen.shibadogs.net/api/v1/korcen", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                string responseData = await response.Content.ReadAsStringAsync();
+                Console.WriteLine(responseData);
+            }
+            else
+            {
+                Console.WriteLine($"Error: {response.StatusCode}");
+            }
+        }
+    }
+}
+```
+
+>Ruby
+```rb
+require 'net/http'
+require 'uri'
+require 'json'
+
+uri = URI.parse('https://korcen.shibadogs.net/api/v1/korcen')
+header = {'Content-Type' => 'application/json', 'Accept' => 'application/json'}
+data = {
+  'input' => '욕설이 포함될수 있는 메시지',
+  'replace-front' => '감지된 욕설 앞부분에 넣을 메시지 (옵션)',
+  'replace-end' => '감지된 욕설 뒷부분에 넣을 메시지 (옵션)'
+}
+
+http = Net::HTTP.new(uri.host, uri.port)
+request = Net::HTTP::Post.new(uri.path, header)
+request.body = data.to_json
+
+response = http.request(request)
+puts response.body
+```
+
+>Go
+```go
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+)
+
+func main() {
+	url := "https://korcen.shibadogs.net/api/v1/korcen"
+
+	data := map[string]string{
+		"input":         "욕설이 포함될수 있는 메시지",
+		"replace-front": "감지된 욕설 앞부분에 넣을 메시지 (옵션)",
+		"replace-end":   "감지된 욕설 뒷부분에 넣을 메시지 (옵션)",
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println("Error marshalling data:", err)
+		return
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		fmt.Println("Error creating request:", err)
+		return
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error making request:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		return
+	}
+
+	fmt.Println("Response:", string(body))
+}
+```
+
+>Kotlin
+```kt
+import java.io.*
+import java.net.HttpURLConnection
+import java.net.URL
+import org.json.JSONObject
+
+fun main() {
+    val url = URL("https://korcen.shibadogs.net/api/v1/korcen")
+    val connection = url.openConnection() as HttpURLConnection
+    connection.requestMethod = "POST"
+    connection.setRequestProperty("Accept", "application/json")
+    connection.setRequestProperty("Content-Type", "application/json")
+    connection.doOutput = true
+
+    val data = JSONObject()
+    data.put("input", "욕설이 포함될수 있는 메시지")
+    data.put("replace-front", "감지된 욕설 앞부분에 넣을 메시지 (옵션)")
+    data.put("replace-end", "감지된 욕설 뒷부분에 넣을 메시지 (옵션)")
+
+    val outputStream: OutputStream = connection.outputStream
+    val writer = BufferedWriter(OutputStreamWriter(outputStream, "UTF-8"))
+    writer.write(data.toString())
+    writer.flush()
+    writer.close()
+
+    val responseCode = connection.responseCode
+    println("Response Code: $responseCode")
+
+    if (responseCode == HttpURLConnection.HTTP_OK) {
+        val inputStream = BufferedReader(InputStreamReader(connection.inputStream))
+        val response = StringBuffer()
+        var inputLine: String?
+
+        while (inputStream.readLine().also { inputLine = it } != null) {
+            response.append(inputLine)
+        }
+
+        println("Response: ${response.toString()}")
+    } else {
+        println("Error: $responseCode")
+    }
+
+    connection.disconnect()
+}
+```
+
 # ⬇️ 설치 방법
 
 >docker

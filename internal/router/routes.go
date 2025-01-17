@@ -23,6 +23,8 @@ func Korcen(c *gin.Context) {
 	var header check.Header
 
 	switch c.ContentType() {
+	case "text/xml":
+		fallthrough
 	case "application/xml":
 		if err := c.ShouldBindXML(&header); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid XML request"})

@@ -1,4 +1,4 @@
-// korcen-api/main.go
+// main.go
 
 package main
 
@@ -7,8 +7,12 @@ import (
 	"log"
 	"os"
 
+	// Proto.Actor
+	"github.com/asynkron/protoactor-go/actor"
+
 	_ "github.com/fluffy-melli/korcen-api/docs"
 	"github.com/fluffy-melli/korcen-api/internal/router"
+	"github.com/fluffy-melli/korcen-api/pkg/check"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -16,9 +20,18 @@ import (
 func main() {
 	fmt.Println("Korcen API Server Start")
 
-	setup := router.SetupRouter()
-	setup.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	if err := setup.Run(":7777"); err != nil {
+	system := actor.NewActorSystem()
+
+	props := actor.PropsFromProducer(func() actor.Actor {
+		return &check.KorcenActor{}
+	})
+	korcenPID := system.Root.Spawn(props)
+
+	r := router.SetupRouter(system, korcenPID)
+
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	if err := r.Run(":7777"); err != nil {
 		log.Println("Failed to start server:", err)
 		os.Exit(1)
 	}

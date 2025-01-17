@@ -4,7 +4,9 @@ package check
 
 import (
 	"encoding/xml"
+	"errors"
 
+	"github.com/asynkron/protoactor-go/actor"
 	"github.com/fluffy-melli/korcen-go"
 )
 
@@ -55,5 +57,42 @@ func formatMessage(text string, start, end int, prefix, suffix string) string {
 		return text[:start] + text[start:end] + suffix + text[end:]
 	default:
 		return text
+	}
+}
+
+// ---------------------------------------------------------------------
+// Actor
+// ---------------------------------------------------------------------
+
+type KorcenRequest struct {
+	Header *Header
+}
+
+type KorcenResponse struct {
+	Respond *Respond
+	Err     error
+}
+
+type KorcenActor struct{}
+
+func (k *KorcenActor) Receive(context actor.Context) {
+	switch msg := context.Message().(type) {
+
+	case *KorcenRequest:
+		if msg.Header == nil {
+			context.Respond(&KorcenResponse{
+				Respond: nil,
+				Err:     errors.New("KorcenActor: Header is nil"),
+			})
+			return
+		}
+		resp := Korcen(msg.Header)
+
+		context.Respond(&KorcenResponse{
+			Respond: resp,
+			Err:     nil,
+		})
+
+	default:
 	}
 }

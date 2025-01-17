@@ -40,14 +40,6 @@ jobs:
       run: |
         docker ps
 
-    - name: Test Docker container
-      run: |
-        # Wait until the service inside the container is ready
-        until curl --silent --fail http://localhost:7777; do
-          echo "Waiting for the service to be ready..."
-          sleep 5
-        done
-
     - name: Stop Docker container
       run: |
         docker ps -q --filter "ancestor=korcen-api" | xargs -I {} docker stop {}

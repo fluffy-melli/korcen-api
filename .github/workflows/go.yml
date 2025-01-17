@@ -36,11 +36,18 @@ jobs:
       run: |
         docker run -d -p 7777:7777 korcen-api
 
+    - name: Check Docker container status
+      run: |
+        docker ps
+
     - name: Test Docker container
       run: |
-        # Add a simple test to ensure the service inside the container is running
-        curl --fail http://localhost:7777 || exit 1
+        # Wait until the service inside the container is ready
+        until curl --silent --fail http://localhost:7777; do
+          echo "Waiting for the service to be ready..."
+          sleep 5
+        done
 
     - name: Stop Docker container
       run: |
-        docker ps -q --filter "ancestor=korcen-api" | xargs docker stop
+        docker ps -q --filter "ancestor=korcen-api" | xargs -I {} docker stop {}

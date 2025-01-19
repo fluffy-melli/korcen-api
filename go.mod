@@ -5,11 +5,11 @@ go 1.22.0
 toolchain go1.22.2
 
 require (
-	github.com/fluffy-melli/korcen-go v1.0.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
+	github.com/fluffy-melli/korcen-go v1.1.0
 )
 
 require (
@@ -22,6 +22,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
+	github.com/fluffy-melli/korcen-go v1.1.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/gin-contrib/sse v1.0.0 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
@@ -35,6 +36,7 @@ require (
 	github.com/go-playground/validator/v10 v10.24.0 // indirect
 	github.com/goccy/go-json v0.10.4 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/google/btree v1.1.3 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/gyarang/gohangul v0.1.3 // indirect
 	github.com/josharian/intern v1.0.0 // indirect

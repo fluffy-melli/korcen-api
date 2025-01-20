@@ -24,61 +24,45 @@ import (
 // @Router      /api/v1/korcen [post]
 func KorcenV1(c *gin.Context, system *actor.ActorSystem, korcenPID *actor.PID) {
 	var header check.Header
-	isXML := false
+	var responseType ResponseType = JSON
 
 	switch c.ContentType() {
 	case "text/xml", "application/xml":
 		if err := c.ShouldBindXML(&header); err != nil {
-			respond(c, http.StatusBadRequest, true, gin.H{"error": "Invalid XML request"})
+			respond(c, http.StatusBadRequest, XML, gin.H{"error": "Invalid XML request"})
 			return
 		}
-		isXML = true
+		responseType = XML
 	default:
 		if err := c.ShouldBindJSON(&header); err != nil {
-			respond(c, http.StatusBadRequest, false, gin.H{"error": "Invalid JSON request"})
+			respond(c, http.StatusBadRequest, JSON, gin.H{"error": "Invalid JSON request"})
 			return
 		}
 	}
 
 	if strings.TrimSpace(header.Input) == "" {
-		if isXML {
-			c.XML(http.StatusBadRequest, gin.H{"error": "Invalid request: empty input"})
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: empty input"})
-		}
+		respond(c, http.StatusBadRequest, responseType, gin.H{"error": "Invalid request: empty input"})
 		return
 	}
 
 	future := system.Root.RequestFuture(korcenPID, &check.KorcenRequest{Header: &header}, 5*time.Second)
 	result, err := future.Result()
 	if err != nil {
-		if isXML {
-			c.XML(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		}
+		respond(c, http.StatusInternalServerError, responseType, gin.H{"error": err.Error()})
 		return
 	}
 
 	korcenResp, ok := result.(*check.KorcenResponse)
 	if !ok {
-		if isXML {
-			c.XML(http.StatusInternalServerError, gin.H{"error": "Invalid actor response"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid actor response"})
-		}
+		respond(c, http.StatusInternalServerError, responseType, gin.H{"error": "Invalid actor response"})
 		return
 	}
 
 	if korcenResp.Err != nil {
-		if isXML {
-			c.XML(http.StatusBadRequest, gin.H{"error": korcenResp.Err.Error()})
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": korcenResp.Err.Error()})
-		}
+		respond(c, http.StatusBadRequest, responseType, gin.H{"error": korcenResp.Err.Error()})
 		return
 	}
 
 	response := korcenResp.Respond
-	respond(c, http.StatusOK, isXML, response)
+	respond(c, http.StatusOK, responseType, response)
 }

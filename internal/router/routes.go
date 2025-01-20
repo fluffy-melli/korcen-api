@@ -1,4 +1,5 @@
 // internal/router/routes.go
+
 package router
 
 import (
@@ -6,19 +7,28 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/fluffy-melli/korcen-api/docs"
+	"github.com/asynkron/protoactor-go/actor"
 	"github.com/fluffy-melli/korcen-api/internal/middleware"
 	"github.com/fluffy-melli/korcen-api/pkg/check"
 	"github.com/gin-gonic/gin"
-
-	"github.com/asynkron/protoactor-go/actor"
 )
 
-func SetupRouter(system *actor.ActorSystem, korcenPID *actor.PID) *gin.Engine {
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.Default()
+func respond(c *gin.Context, status int, isXML bool, payload interface{}) {
+	if isXML {
+		c.XML(status, payload)
+	} else {
+		c.JSON(status, payload)
+	}
+}
 
-	r.Use(middleware.TokenBucketMiddleware())
+func SetupRouter(system *actor.ActorSystem, korcenPID *actor.PID, config middleware.MiddlewareConfig) *gin.Engine {
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+
+	r.Use(middleware.TokenBucketMiddleware(config))
 
 	APIGroup := r.Group("/api/v1")
 	{
@@ -29,13 +39,13 @@ func SetupRouter(system *actor.ActorSystem, korcenPID *actor.PID) *gin.Engine {
 			switch c.ContentType() {
 			case "text/xml", "application/xml":
 				if err := c.ShouldBindXML(&header); err != nil {
-					c.XML(http.StatusBadRequest, gin.H{"error": "Invalid XML request"})
+					respond(c, http.StatusBadRequest, true, gin.H{"error": "Invalid XML request"})
 					return
 				}
 				isXML = true
 			default:
 				if err := c.ShouldBindJSON(&header); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON request"})
+					respond(c, http.StatusBadRequest, false, gin.H{"error": "Invalid JSON request"})
 					return
 				}
 			}
@@ -49,9 +59,7 @@ func SetupRouter(system *actor.ActorSystem, korcenPID *actor.PID) *gin.Engine {
 				return
 			}
 
-			msg := &check.KorcenRequest{Header: &header}
-			future := system.Root.RequestFuture(korcenPID, msg, 5*time.Second)
-
+			future := system.Root.RequestFuture(korcenPID, &check.KorcenRequest{Header: &header}, 5*time.Second)
 			result, err := future.Result()
 			if err != nil {
 				if isXML {
@@ -82,12 +90,7 @@ func SetupRouter(system *actor.ActorSystem, korcenPID *actor.PID) *gin.Engine {
 			}
 
 			response := korcenResp.Respond
-
-			if isXML {
-				c.XML(http.StatusOK, response)
-			} else {
-				c.JSON(http.StatusOK, response)
-			}
+			respond(c, http.StatusOK, isXML, response)
 		})
 	}
 

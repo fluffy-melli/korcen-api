@@ -3,9 +3,9 @@
 package check
 
 import (
-	"container/list"
 	"encoding/xml"
 	"errors"
+	"strings"
 	"sync"
 
 	"github.com/asynkron/protoactor-go/actor"
@@ -35,115 +35,36 @@ var korcenPool = sync.Pool{
 	},
 }
 
-func newKorcenResult() *KorcenResult {
-	return korcenPool.Get().(*KorcenResult)
-}
-
 func freeKorcenResult(result *KorcenResult) {
 	*result = KorcenResult{}
 	korcenPool.Put(result)
 }
 
-type Node struct {
-	key   string
-	value *KorcenResult
-	elem  *list.Element
-}
+var (
+	globalLRU = NewShardedLRUCache(16, 64)
+)
 
-var nodePool = sync.Pool{
-	New: func() interface{} {
-		return &Node{}
-	},
-}
-
-func newNode(key string, value *KorcenResult) *Node {
-	n := nodePool.Get().(*Node)
-	n.key = key
-	n.value = value
-	n.elem = &list.Element{Value: n}
-	return n
-}
-
-func freeNode(n *Node) {
-	n.key = ""
-	n.value = nil
-	n.elem = nil
-	nodePool.Put(n)
-}
-
-type LRUCache struct {
-	mutex    sync.Mutex
-	capacity int
-	ll       *list.List
-	items    map[string]*list.Element
-}
-
-func NewLRUCache(capacity int) *LRUCache {
-	return &LRUCache{
-		capacity: capacity,
-		ll:       list.New(),
-		items:    make(map[string]*list.Element),
-	}
-}
-
-func (c *LRUCache) Get(key string) (*KorcenResult, bool) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if elem, ok := c.items[key]; ok {
-		c.ll.MoveToFront(elem)
-		node := elem.Value.(*Node)
-		return node.value, true
-	}
-	return nil, false
-}
-
-func (c *LRUCache) Set(key string, value *KorcenResult) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if elem, ok := c.items[key]; ok {
-		c.ll.MoveToFront(elem)
-		node := elem.Value.(*Node)
-		node.value = value
-		return
+func Korcen(header *Header) (*Respond, error) {
+	if header == nil {
+		return nil, errors.New("Korcen: header is nil")
 	}
 
-	n := newNode(key, value)
-	elem := c.ll.PushFront(n)
-	n.elem = elem
-	c.items[key] = elem
-
-	if c.ll.Len() > c.capacity {
-		old := c.ll.Back()
-		if old != nil {
-			c.removeElement(old)
-		}
-	}
-}
-
-func (c *LRUCache) removeElement(elem *list.Element) {
-	c.ll.Remove(elem)
-	node := elem.Value.(*Node)
-	delete(c.items, node.key)
-
-	freeKorcenResult(node.value)
-	freeNode(node)
-}
-
-var globalLRU = NewLRUCache(1000)
-
-func Korcen(header *Header) *Respond {
-	if info, ok := globalLRU.Get(header.Input); ok {
-		return buildRespond(header, info)
+	info, ok := globalLRU.Get(header.Input)
+	if ok {
+		return buildRespond(header, info), nil
 	}
 
-	info := newKorcenResult()
-	*info = *korcen.Check(header.Input)
+	info = korcen.Check(header.Input)
+	if info == nil {
+		return nil, errors.New("Korcen: korcen.Check returned nil")
+	}
 
-	globalLRU.Set(header.Input, info)
+	err := globalLRU.Set(header.Input, info)
+	if err != nil {
+		return nil, err
+	}
 
-	return buildRespond(header, info)
+	return buildRespond(header, info), nil
 }
 
 func buildRespond(header *Header, info *KorcenResult) *Respond {
@@ -172,16 +93,17 @@ func formatMessage(text string, start, end int, prefix, suffix string) string {
 		return text
 	}
 
-	switch {
-	case prefix != "" && suffix != "":
-		return text[:start] + prefix + text[start:end] + suffix + text[end:]
-	case prefix != "":
-		return text[:start] + prefix + text[start:end] + text[end:]
-	case suffix != "":
-		return text[:start] + text[start:end] + suffix + text[end:]
-	default:
-		return text
+	var sb strings.Builder
+	sb.WriteString(text[:start])
+	if prefix != "" {
+		sb.WriteString(prefix)
 	}
+	sb.WriteString(text[start:end])
+	if suffix != "" {
+		sb.WriteString(suffix)
+	}
+	sb.WriteString(text[end:])
+	return sb.String()
 }
 
 // ---------------------------------------------------------------------
@@ -210,7 +132,15 @@ func (k *KorcenActor) Receive(context actor.Context) {
 			})
 			return
 		}
-		resp := Korcen(msg.Header)
+
+		resp, err := Korcen(msg.Header)
+		if err != nil {
+			context.Respond(&KorcenResponse{
+				Respond: nil,
+				Err:     err,
+			})
+			return
+		}
 
 		context.Respond(&KorcenResponse{
 			Respond: resp,

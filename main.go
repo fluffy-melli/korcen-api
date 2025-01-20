@@ -7,10 +7,10 @@ import (
 	"log"
 	"os"
 
-	// Proto.Actor
 	"github.com/asynkron/protoactor-go/actor"
 
 	_ "github.com/fluffy-melli/korcen-api/docs"
+	"github.com/fluffy-melli/korcen-api/internal/middleware"
 	"github.com/fluffy-melli/korcen-api/internal/router"
 	"github.com/fluffy-melli/korcen-api/pkg/check"
 	swaggerFiles "github.com/swaggo/files"
@@ -25,9 +25,15 @@ func main() {
 	props := actor.PropsFromProducer(func() actor.Actor {
 		return &check.KorcenActor{}
 	})
+
 	korcenPID := system.Root.Spawn(props)
 
-	r := router.SetupRouter(system, korcenPID)
+	config := middleware.MiddlewareConfig{
+		Capacity:   100,          // 최대 토큰 수
+		RefillRate: 100.0 / 60.0, // 초당 리필 속도 (1분당 100개)
+	}
+
+	r := router.SetupRouter(system, korcenPID, config)
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 

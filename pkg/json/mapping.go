@@ -4,10 +4,10 @@ package json
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"sync"
-	"unsafe"
 )
 
 var bufferPool = sync.Pool{
@@ -21,22 +21,19 @@ func Mapping[T any](body []byte) ([]T, error) {
 		return nil, errors.New("Mapping error: empty JSON body")
 	}
 
-	if !json.Valid(body) {
-		return nil, errors.New("Mapping error: invalid JSON format")
-	}
-
-	jsonStr := *(*string)(unsafe.Pointer(&body))
-
 	var rawList []json.RawMessage
-	err := json.Unmarshal(*(*[]byte)(unsafe.Pointer(&jsonStr)), &rawList)
-	if err != nil {
-		return nil, errors.New("MappingParallel error: JSON list parsing failed -> " + err.Error())
+	if err := json.Unmarshal(body, &rawList); err != nil {
+		return nil, errors.New("Mapping error: JSON list parsing failed -> " + err.Error())
 	}
 
 	numItems := len(rawList)
 	results := make([]T, numItems)
-	errChan := make(chan error, numItems)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	wg := sync.WaitGroup{}
+	errChan := make(chan error, numItems)
 
 	for i, raw := range rawList {
 		wg.Add(1)
@@ -44,23 +41,27 @@ func Mapping[T any](body []byte) ([]T, error) {
 		go func(idx int, data json.RawMessage) {
 			defer wg.Done()
 
-			jsonSegment := *(*string)(unsafe.Pointer(&data))
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 
 			buf := bufferPool.Get().(*bytes.Buffer)
 			buf.Reset()
-			buf.WriteString(jsonSegment)
+			defer bufferPool.Put(buf)
 
-			decoder := json.NewDecoder(buf)
+			buf.Write(data)
+
 			var temp T
+			decoder := json.NewDecoder(buf)
 			if err := decoder.Decode(&temp); err != nil {
-				errChan <- errors.New("MappingParallel error: JSON decoding failed -> " + err.Error())
-				bufferPool.Put(buf)
+				errChan <- errors.New("Mapping error: JSON decoding failed -> " + err.Error())
+				cancel()
 				return
 			}
 
 			results[idx] = temp
-
-			bufferPool.Put(buf)
 		}(i, raw)
 	}
 

@@ -1,241 +1,77 @@
 ; limit_test.asm
 ; NASM syntax x86-64 Windows
 
-; 아직 미완
+; Made By Tjdmin1
 
-BITS 64
+section .data
+    url db "127.0.0.1", 0
+    port dw 7777
+    http_request db "POST /api/v1/korcen HTTP/1.1", 0x0d, 0x0a
+                 db "Host: localhost", 0x0d, 0x0a
+                 db "Content-Type: application/json", 0x0d, 0x0a
+                 db "Content-Length: 58", 0x0d, 0x0a, 0x0d, 0x0a
+                 db '{"input":"string","replace-end":"string","replace-front":"string"}', 0
 
-SECTION .data
-    jsonData db '{"input":"string","replace-end":"string","replace-front":"string"}',0
-    jsonDataLen equ $ - jsonData - 1
+section .bss
+    response_buffer resb 1024
+    socket_fd resq 1
+    loop_count resq 1       ; 반복 카운트 저장소
 
-    httpRequestHeader db "POST /api/v1/korcen HTTP/1.1\r\nHost: localhost:7777\r\nContent-Type: application/json\r\nContent-Length: 64\r\nConnection: close\r\n\r\n",0
-    httpRequestHeaderLen equ $ - httpRequestHeader -1
+section .text
+    global _start
 
-    completeMsg db "200 HTTP POST Complete",10,0
-    wsaStartMsg db "WSAStartup successful",10,0
-    socketCreatedMsg db "Socket created",10,0
-    connectedMsg db "Connected to server",10,0
-    sendHeaderMsg db "HTTP header sent",10,0
-    sendJsonMsg db "JSON data sent",10,0
-    recvMsg db "Response received",10,0
-    connectFailedMsg db "Connect failed",10,0
-    sendFailedMsg db "Send failed",10,0
-    recvFailedMsg db "Recv failed",10,0
-    cleanupMsg db "WSACleanup called",10,0
-    exitErrorMsg db "WSAStartup failed",10,0
+_start:
+    mov qword [loop_count], 200  ; 초기 반복 횟수 설정
 
-sockaddr_in:
-    dw 2
-    dw 0x1E61
-    dd 0x0100007F
-    times 8 db 0
+.loop:
+    call send_request            ; send_request 함수 호출
 
-SECTION .bss
-    wsaData resb 104
-    sock resq 1
-    recvBuffer resb 4096
+    ; 반복 횟수 감소
+    mov rax, [loop_count]        ; loop_count 값을 rax로 로드
+    dec rax                      ; rax 감소
+    mov [loop_count], rax        ; 감소된 값을 loop_count에 저장
 
-SECTION .text
-    extern ExitProcess
-    extern WSAStartup
-    extern WSACleanup
-    extern socket
-    extern connect
-    extern send
-    extern recv
-    extern closesocket
-    extern printf
+    cmp rax, 0                   ; rax가 0인지 확인
+    jne .loop                    ; 0이 아니면 .loop로 이동
 
-    global main
+    ; 프로그램 종료
+    mov rax, 60                  ; exit system call
+    xor rdi, rdi                 ; exit code 0
+    syscall
 
-main:
-    mov ecx, 0x0202
-    lea rdx, [rel wsaData]
-    sub rsp, 40
-    call WSAStartup
-    add rsp, 40
-    cmp eax, 0
-    jne exit_error
+send_request:
+    mov rax, 41             ; socket system call
+    xor rdi, rdi
+    xor rsi, rsi
+    xor rdx, rdx
+    syscall
+    mov [socket_fd], rax    ; socket 파일 디스크립터 저장
 
-    lea rcx, [rel wsaStartMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
+    mov rdi, [socket_fd]    ; connect system call
+    lea rsi, [rel url]
+    mov rdx, 16
+    mov rax, 42
+    syscall
 
-    mov r12d, 0
+    mov rdi, [socket_fd]    ; send system call
+    lea rsi, [rel http_request]
+    mov rdx, 128
+    mov rax, 44
+    syscall
 
-send_loop:
-    cmp r12d, 200
-    jge end_loop
+    mov rdi, [socket_fd]    ; recv system call
+    lea rsi, [response_buffer]
+    mov rdx, 1024
+    mov rax, 45
+    syscall
 
-    mov ecx, 2
-    mov edx, 1
-    mov r8d, 6
-    sub rsp, 40
-    call socket
-    add rsp, 40
-    cmp rax, -1
-    je loop_continue
-    mov [rel sock], rax
+    mov rdi, 1              ; write system call
+    lea rsi, [response_buffer]
+    mov rdx, rax
+    mov rax, 1
+    syscall
 
-    lea rcx, [rel socketCreatedMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    mov rax, [rel sock]
-    mov rcx, rax
-    lea rdx, [rel sockaddr_in]
-    mov r8d, 16
-    sub rsp, 40
-    call connect
-    add rsp, 40
-    cmp eax, -1
-    je connect_failed
-
-    lea rcx, [rel connectedMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    mov rax, [rel sock]
-    mov rcx, rax
-    lea rdx, [rel httpRequestHeader]
-    mov r8d, httpRequestHeaderLen
-    mov r9d, 0
-    sub rsp, 40
-    call send
-    add rsp, 40
-    cmp eax, -1
-    je send_failed
-
-    lea rcx, [rel sendHeaderMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    mov rax, [rel sock]
-    mov rcx, rax
-    lea rdx, [rel jsonData]
-    mov r8d, jsonDataLen
-    mov r9d, 0
-    sub rsp, 40
-    call send
-    add rsp, 40
-    cmp eax, -1
-    je send_failed
-
-    lea rcx, [rel sendJsonMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    mov rax, [rel sock]
-    mov rcx, rax
-    lea rdx, [rel recvBuffer]
-    mov r8d, 4096
-    mov r9d, 0
-    sub rsp, 40
-    call recv
-    add rsp, 40
-    cmp eax, -1
-    je recv_failed
-
-    lea rcx, [rel recvMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    mov rax, [rel sock]
-    mov rcx, rax
-    sub rsp, 40
-    call closesocket
-    add rsp, 40
-
-    inc r12d
-
-    jmp send_loop
-
-connect_failed:
-    lea rcx, [rel connectFailedMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    mov rax, [rel sock]
-    mov rcx, rax
-    sub rsp, 40
-    call closesocket
-    add rsp, 40
-
-    inc r12d
-
-    jmp send_loop
-
-send_failed:
-    lea rcx, [rel sendFailedMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    mov rax, [rel sock]
-    mov rcx, rax
-    sub rsp, 40
-    call closesocket
-    add rsp, 40
-
-    inc r12d
-
-    jmp send_loop
-
-recv_failed:
-    lea rcx, [rel recvFailedMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    mov rax, [rel sock]
-    mov rcx, rax
-    sub rsp, 40
-    call closesocket
-    add rsp, 40
-
-    inc r12d
-
-    jmp send_loop
-
-loop_continue:
-    inc r12d
-    jmp send_loop
-
-end_loop:
-    sub rsp, 40
-    call WSACleanup
-    add rsp, 40
-
-    lea rcx, [rel cleanupMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    lea rcx, [rel completeMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    xor ecx, ecx
-    sub rsp, 40
-    call ExitProcess
-    add rsp, 40
-
-exit_error:
-    lea rcx, [rel exitErrorMsg]
-    sub rsp, 40
-    call printf
-    add rsp, 40
-
-    mov ecx, 1
-    sub rsp, 40
-    call ExitProcess
-    add rsp, 40
+    mov rdi, [socket_fd]    ; close system call
+    mov rax, 3
+    syscall
+    ret

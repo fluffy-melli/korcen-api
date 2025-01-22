@@ -70,47 +70,6 @@ func putEntry(e *entry) {
 	entryPool.Put(e)
 }
 
-type GoroutineManager struct {
-	numWorkers int
-	jobChan    chan func()
-	stopChan   chan struct{}
-	wg         sync.WaitGroup
-}
-
-func NewGoroutineManager(workerCount int) *GoroutineManager {
-	manager := &GoroutineManager{
-		numWorkers: workerCount,
-		jobChan:    make(chan func(), 1000),
-		stopChan:   make(chan struct{}),
-	}
-
-	manager.wg.Add(workerCount)
-	for i := 0; i < workerCount; i++ {
-		go func() {
-			defer manager.wg.Done()
-			for {
-				select {
-				case job := <-manager.jobChan:
-					job()
-				case <-manager.stopChan:
-					return
-				}
-			}
-		}()
-	}
-
-	return manager
-}
-
-func (gm *GoroutineManager) Submit(job func()) {
-	gm.jobChan <- job
-}
-
-func (gm *GoroutineManager) Shutdown() {
-	close(gm.stopChan)
-	gm.wg.Wait()
-}
-
 type UsageStats struct {
 	Hits       uint64
 	Misses     uint64
@@ -236,11 +195,11 @@ func (c *LRUCache) removeOldest() {
 type ShardedLRUCache struct {
 	shards     []*TrackableLRUCache
 	shardCount int
-	manager    *GoroutineManager
+	workerPool *WorkerPool
 	allocator  *SlabAllocator
 }
 
-func NewShardedLRUCache(shardCount int, perShardCapacity int) *ShardedLRUCache {
+func NewShardedLRUCache(shardCount int, perShardCapacity int, workerPool *WorkerPool) *ShardedLRUCache {
 	if shardCount <= 0 || (shardCount&(shardCount-1)) != 0 {
 		panic("shardCount must be a power of two")
 	}
@@ -255,12 +214,10 @@ func NewShardedLRUCache(shardCount int, perShardCapacity int) *ShardedLRUCache {
 		shards[i] = trackedLRU
 	}
 
-	manager := NewGoroutineManager(shardCount)
-
 	return &ShardedLRUCache{
 		shards:     shards,
 		shardCount: shardCount,
-		manager:    manager,
+		workerPool: workerPool,
 		allocator:  allocator,
 	}
 }
@@ -279,9 +236,9 @@ func (c *ShardedLRUCache) Set(key string, value *KorcenResult) error {
 	shard := c.getShard(key)
 	done := make(chan error, 1)
 
-	c.manager.Submit(func() {
-		err := shard.Set(key, value)
-		done <- err
+	c.workerPool.Submit(func() {
+		shard.Set(key, value)
+		done <- nil
 	})
 
 	err := <-done
@@ -309,5 +266,5 @@ func (c *ShardedLRUCache) GetStats() UsageStats {
 }
 
 func (c *ShardedLRUCache) Stop() {
-	c.manager.Shutdown()
+	c.workerPool.Shutdown()
 }

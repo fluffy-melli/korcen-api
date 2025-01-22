@@ -40,8 +40,14 @@ func freeKorcenResult(result *KorcenResult) {
 	korcenPool.Put(result)
 }
 
+var workerPool = NewWorkerPool(10)
+
+func ShutdownWorkerPool() {
+	workerPool.Shutdown()
+}
+
 var (
-	globalLRU = NewShardedLRUCache(16, 64)
+	globalLRU = NewShardedLRUCache(16, 64, workerPool)
 )
 
 func Korcen(header *Header) (*Respond, error) {
@@ -119,6 +125,11 @@ type KorcenResponse struct {
 	Err     error
 }
 
+type KorcenResponseMessage struct {
+	Respond *Respond
+	Err     error
+}
+
 type KorcenActor struct{}
 
 func (k *KorcenActor) Receive(context actor.Context) {
@@ -133,18 +144,18 @@ func (k *KorcenActor) Receive(context actor.Context) {
 			return
 		}
 
-		resp, err := Korcen(msg.Header)
-		if err != nil {
-			context.Respond(&KorcenResponse{
-				Respond: nil,
+		workerPool.Submit(func() {
+			resp, err := Korcen(msg.Header)
+			context.Send(context.Self(), &KorcenResponseMessage{
+				Respond: resp,
 				Err:     err,
 			})
-			return
-		}
+		})
 
+	case *KorcenResponseMessage:
 		context.Respond(&KorcenResponse{
-			Respond: resp,
-			Err:     nil,
+			Respond: msg.Respond,
+			Err:     msg.Err,
 		})
 
 	default:

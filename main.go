@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/fluffy-melli/korcen-go"
 	"log"
 	"net/http"
 	"os"
@@ -24,6 +25,8 @@ import (
 
 func main() {
 	fmt.Println("Korcen API Server Start")
+
+	korcen.InitProfanityData()
 
 	system := actor.NewActorSystem()
 

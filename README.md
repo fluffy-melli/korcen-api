@@ -51,7 +51,7 @@ Copyright© All rights reserved.
 ```py
 import requests
 
-url = 'https://korcen.shibadogs.net/api/v1/korcen'
+url = 'https://korcen.melli.dev/api/v1/korcen'
 
 headers = {
     'accept': 'application/json',
@@ -72,7 +72,7 @@ print(response.text)
 
 >javascript
 ```js
-const url = 'https://korcen.shibadogs.net/api/v1/korcen'
+const url = 'https://korcen.melli.dev/api/v1/korcen'
 
 const headers = {
     'accept': 'application/json',
@@ -117,7 +117,7 @@ struct KorcenRequest {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let url = "https://korcen.shibadogs.net/api/v1/korcen";
+    let url = "https://korcen.melli.dev/api/v1/korcen";
 
     let data = KorcenRequest {
         input: "욕설이 포함될수 있는 메시지".to_string(),
@@ -170,7 +170,7 @@ class Program
             string json = System.Text.Json.JsonSerializer.Serialize(data);
             StringContent content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            HttpResponseMessage response = await client.PostAsync("https://korcen.shibadogs.net/api/v1/korcen", content);
+            HttpResponseMessage response = await client.PostAsync("https://korcen.melli.dev/api/v1/korcen", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -192,7 +192,7 @@ require 'net/http'
 require 'uri'
 require 'json'
 
-uri = URI.parse('https://korcen.shibadogs.net/api/v1/korcen')
+uri = URI.parse('https://korcen.melli.dev/api/v1/korcen')
 header = {'Content-Type' => 'application/json', 'Accept' => 'application/json'}
 data = {
   'input' => '욕설이 포함될수 있는 메시지',
@@ -221,7 +221,7 @@ import (
 )
 
 func main() {
-	url := "https://korcen.shibadogs.net/api/v1/korcen"
+	url := "https://korcen.melli.dev/api/v1/korcen"
 
 	data := map[string]string{
 		"input":         "욕설이 포함될수 있는 메시지",
@@ -270,7 +270,7 @@ import java.net.URL
 import org.json.JSONObject
 
 fun main() {
-    val url = URL("https://korcen.shibadogs.net/api/v1/korcen")
+    val url = URL("https://korcen.melli.dev/api/v1/korcen")
     val connection = url.openConnection() as HttpURLConnection
     connection.requestMethod = "POST"
     connection.setRequestProperty("Accept", "application/json")
